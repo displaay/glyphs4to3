@@ -65,7 +65,7 @@ from .normalize import (
 )
 from .reader import Source, load, load_with_report, loads, loads_with_report
 
-__version__ = "0.3.0"
+__version__ = "0.3.1"
 
 __all__ = [
     "EDITOR_ONLY",

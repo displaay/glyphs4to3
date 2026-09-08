@@ -165,9 +165,9 @@ def find_unsupported(source: PlistDict) -> list[Finding]:
                 if _is_shape_group(shape):
                     add("shapeGroup", where)
                 for node in _nodes(shape.get("nodes")):
-                    if _has_node_attributes(node):
+                    (hoi, unmapped) = _node_problems(node)
+                    if hoi:
                         add("nodeAttr.hoi", where)
-                    unmapped = _unmapped_node_type(node)
                     if unmapped is not None:
                         add("node.type", f"{where} ({unmapped})")
     return findings
@@ -462,37 +462,36 @@ def _is_shape_group(shape: PlistDict) -> bool:
     return bool(set(shape) - _EMPTY_PATH_KEYS)
 
 
-def _has_node_attributes(node: Any) -> bool:
-    """Whether a node carries format 4 higher-order interpolation.
+def _node_problems(node: Any) -> tuple[bool, str | None]:
+    """Both format 4 problems a single node can carry.
 
-    ``GSNode.read_v3`` already accepts a fourth element - it reads it as
-    userData - so only the ``hoi`` key is a problem.
-    """
-    if not isinstance(node, list) or len(node) < 4:
-        return False
-    return isinstance(node[3], dict) and "hoi" in node[3]
+    :returns: ``(carries higher-order interpolation, unmapped type letter)``,
+        the second as ``"h (Hobby)"``-style text for the message or None.
 
+    One function rather than two because this is the hot loop:
+    :func:`find_unsupported` visits every node of every layer of every glyph,
+    and the shape guards are the bulk of the work for the overwhelming majority
+    of nodes, which have no problem at all.
 
-def _unmapped_node_type(node: Any) -> str | None:
-    """The node's type letter, when no Glyphs 3 reader maps it.
-
-    ``GSNode.read_v3`` branches on the first character (c/o/l/q, with a
-    trailing "s" for smooth) and leaves everything else as ``type=None``. A
-    node with no curve type does not fail the build - it silently draws the
-    wrong outline - so this is refused for the same reason as ``hoi``.
-
-    :returns: ``"h (Hobby)"``-style text for the message, or None when the
-        node is readable or is not a node at all.
+    ``GSNode.read_v3`` accepts a fourth element and reads it as userData, so
+    only ``hoi`` is a problem there. It branches on the first character of the
+    type token - c/o/l/q, with a trailing "s" for smooth - and leaves every
+    other letter as ``type=None``: a node that keeps its position and loses its
+    curve type, which draws the wrong outline instead of failing. A token that
+    is empty or not a string is left alone; ``read_v3`` raises on those, and a
+    loud failure needs no help from here.
     """
     if not isinstance(node, list) or len(node) < 3:
-        return None
+        return (False, None)
+
+    unmapped: str | None = None
     token = node[2]
-    if not isinstance(token, str) or not token:
-        return None
-    if token[0] in READABLE_NODE_TYPES:
-        return None
-    name = NODE_TYPE_NAMES.get(token[0])
-    return f"{token} ({name})" if name else token
+    if isinstance(token, str) and token and token[0] not in READABLE_NODE_TYPES:
+        name = NODE_TYPE_NAMES.get(token[0])
+        unmapped = f"{token} ({name})" if name else token
+
+    hoi = len(node) > 3 and isinstance(node[3], dict) and "hoi" in node[3]
+    return (hoi, unmapped)
 
 
 def _has_deferred_coordinates(layer: PlistDict) -> bool:
