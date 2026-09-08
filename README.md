@@ -42,8 +42,16 @@ is not patched.
 
 ## Installation
 
+Not on PyPI on purpose: this package is meant to be deleted once upstream catches up, and a PyPI name cannot be freed again once taken. Releases are wheels attached to a GitHub Release, so pin the asset URL:
+
+```
+glyphs4to3 @ https://github.com/displaay/glyphs4to3/releases/download/v0.1.0/glyphs4to3-0.1.0-py3-none-any.whl
+```
+
+pip fetches a built wheel over plain HTTPS - no git needed in the build image, and it caches like any other wheel. For local work:
+
 ```bash
-pip install glyphs4to3
+pip install -e .
 ```
 
 ## Usage
