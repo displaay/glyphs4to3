@@ -34,6 +34,14 @@ _EDITOR_ONLY_BY_SCOPE = editor_only_by_scope()
 #: empty path. These are the keys such an empty path may still carry.
 _EMPTY_PATH_KEYS = frozenset(("closed", "attr"))
 
+#: The serialiser-level boolean forms a Glyphs 4 source can write where both
+#: schemas say 1/0. openstep_plist yields them as plain strings.
+_BOOLEAN_LITERALS = {":true": 1, ":false": 0}
+
+#: Keys whose subtree the literal scan does not enter - see
+#: :func:`_coerce_boolean_literals`.
+_BOOLEAN_SCAN_SKIP = frozenset(("userData", "nodes"))
+
 _UNSUPPORTED_INTRO = (
     "Unsupported Glyphs 4 source: this file uses features that have no "
     "equivalent in the Glyphs 3 format, and dropping them would produce a "
@@ -186,6 +194,13 @@ def normalize(source: PlistDict) -> NormalizeReport:
     Does not call :func:`find_unsupported` - the caller owns that policy. A
     format 2 or 3 source is left completely untouched, key order included.
 
+    That last part also means a ``:true`` / ``:false`` literal in a *format 3*
+    document written by Glyphs 4 would not be coerced. Considered and left
+    alone deliberately: format 3 output is meant to be readable by Glyphs 3,
+    which cannot parse the literal either, so it is very unlikely to be
+    written there - and "version 2 and 3 sources are untouched" is a documented
+    invariant worth more than covering a case nobody has seen.
+
     In place because a parsed 20 MB source is hundreds of thousands of small
     dicts and a copy would double peak memory for nothing; the dict is
     normally thrown away as soon as it has been handed to a parser.
@@ -194,6 +209,7 @@ def normalize(source: PlistDict) -> NormalizeReport:
     if report.source_version < 4:
         return report
 
+    _coerce_boolean_literals(source, report)
     _rename_family_name(source, report)
     _rename_instance_names(source, report)
     _rename_axis_names(source, report)
@@ -254,6 +270,62 @@ def _rename_axis_names(source: PlistDict, report: NormalizeReport) -> None:
         renamed += 1
     if renamed:
         report.renamed.append(f"axis names -> axis name ({renamed})")
+
+
+def _coerce_boolean_literals(source: PlistDict, report: NormalizeReport) -> None:
+    """Turn the ``:true`` / ``:false`` literals into 1 / 0, everywhere.
+
+    Both published schemas say a boolean is the integer 1 or 0, but a Glyphs 4
+    source writes ``keepAlternatesTogether = :true`` - openstep_plist hands
+    that over as the *string* ``":true"``. This is a serialiser-level form
+    rather than a schema element (it is not in the ``minVersion: 4`` set that
+    :mod:`glyphs4to3.buckets` audits), so it turns up wherever Glyphs writes a
+    boolean, not only in "settings".
+
+    Leaving it alone is silently destructive, and worst in the ``:false``
+    direction, because Glyphs only serialises a boolean that differs from its
+    default - so a written ``:false`` lands on exactly the keys that default to
+    true. ``glyph.export = :false`` loads as ``export == True`` (glyphsLib
+    applies ``bool()`` to a non-empty string), which compiles every
+    non-exporting helper glyph into the font; a custom parameter
+    ``Use Typo Metrics = :false`` sets the OS/2 bit the source explicitly turns
+    off.
+
+    ``userData`` is skipped: that is where free-form author content lives and
+    the literal there could conceivably be a real string. ``nodes`` is skipped
+    for cost - it is the bulk of a source (16 200 nodes in the file this was
+    measured on, and walking them doubled the load time) and holds
+    coordinates, a type string and, in format 4, an attribute dict whose only
+    key that matters here is ``hoi``, which is refused outright. Everywhere
+    else the value ``":false"`` has no legitimate meaning.
+    """
+    coerced = _coerce_booleans_in(source)
+    if coerced:
+        report.renamed.append(f"boolean literals coerced ({coerced})")
+
+
+def _coerce_booleans_in(node: Any) -> int:
+    """Recurse, replacing the literals. :returns: How many were replaced."""
+    coerced = 0
+    if isinstance(node, dict):
+        for (key, value) in list(node.items()):
+            if key in _BOOLEAN_SCAN_SKIP:
+                continue
+            replacement = _BOOLEAN_LITERALS.get(value) if isinstance(value, str) else None
+            if replacement is not None:
+                node[key] = replacement
+                coerced += 1
+            else:
+                coerced += _coerce_booleans_in(value)
+    elif isinstance(node, list):
+        for (index, value) in enumerate(node):
+            replacement = _BOOLEAN_LITERALS.get(value) if isinstance(value, str) else None
+            if replacement is not None:
+                node[index] = replacement
+                coerced += 1
+            else:
+                coerced += _coerce_booleans_in(value)
+    return coerced
 
 
 def _coerce_app_version(source: PlistDict, report: NormalizeReport) -> None:

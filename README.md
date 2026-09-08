@@ -111,6 +111,18 @@ wins.
 Without these a format 4 font loads as `"Unnamed font"` with every instance
 called `"Regular"` and unnamed designspace axes.
 
+**Serialiser quirks — normalised.** Both schemas say a boolean is `1` or `0`,
+but a Glyphs 4 source writes `keepAlternatesTogether = :true`, which arrives
+from the plist parser as the *string* `":true"`. glyphsLib then applies
+`bool()` to it, which is right for `":true"` by luck and **wrong** for
+`":false"` — any non-empty string is truthy. Glyphs only serialises a boolean
+that differs from its default, so a written `":false"` lands on exactly the
+keys that default to true: `glyph.export = :false` would load as `export ==
+True` and compile every non-exporting helper glyph into the font, and a custom
+parameter `Use Typo Metrics = :false` would set the OS/2 bit the source turns
+off. Coerced everywhere except `userData` (free-form author content) and
+`nodes` (cost — and their only format 4 addition is refused anyway).
+
 **Editor state — dropped and counted.** `fontMaster.active`, `layer.active`,
 `glyph.group`, `glyph.groupIdx`, `anchor.attr`, `guide.attr`, `guide.slope`,
 `image.attr`, `settings.dependencies`, `shapeAttr.hidden`, `instances[].id`.

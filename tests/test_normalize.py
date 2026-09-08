@@ -163,6 +163,26 @@ def test_non_numeric_app_version_is_coerced():
     assert int(d[".appVersion"])
 
 
+@pytest.mark.parametrize("literal, expected", [(":true", 1), (":false", 0)])
+def test_settings_boolean_literals_are_coerced(literal, expected):
+    """
+    Both schemas say a boolean is 1/0, but a Glyphs 4 source writes
+    keepAlternatesTogether = :true, which arrives as the STRING ":true".
+    glyphsLib then does bool(...) - right for ":true" by luck, and wrong for
+    ":false", since any non-empty string is truthy.
+    """
+    d = v4_dict(settings={"keepAlternatesTogether": literal, "gridLength": 400})
+    glyphs4to3.normalize(d)
+    assert d["settings"]["keepAlternatesTogether"] == expected
+    assert d["settings"]["gridLength"] == 400
+
+
+def test_settings_strings_that_are_not_boolean_literals_survive():
+    d = v4_dict(settings={"colorSpace": "apple-rgb"})
+    glyphs4to3.normalize(d)
+    assert d["settings"]["colorSpace"] == "apple-rgb"
+
+
 def test_numeric_app_version_is_left_alone():
     d = v4_dict()
     glyphs4to3.normalize(d)
@@ -487,3 +507,74 @@ def test_loads_rejects_a_bucket_c_source():
     with pytest.raises(glyphs4to3.UnsupportedSourceError) as excinfo:
         glyphs4to3.loads(to_text(d))
     assert "nodeAttr.hoi" in str(excinfo.value)
+
+
+# -- the :true / :false serialiser literals --------------------------------
+#
+# Not a schema element - it turns up wherever Glyphs 4 writes a boolean.
+# Glyphs only serialises a boolean that differs from its default, so a written
+# ":false" lands on exactly the keys that default to true, and glyphsLib's
+# bool() on a non-empty string then inverts them.
+
+def test_boolean_literals_are_coerced_on_a_glyph():
+    """glyph.export = :false would otherwise compile helper glyphs into the font."""
+    d = v4_dict()
+    d["glyphs"][0]["export"] = ":false"
+    glyphs4to3.normalize(d)
+    assert d["glyphs"][0]["export"] == 0
+
+
+def test_boolean_literals_are_coerced_on_an_instance():
+    d = v4_dict()
+    d["instances"][0]["active"] = ":false"
+    glyphs4to3.normalize(d)
+    assert d["instances"][0]["active"] == 0
+
+
+def test_boolean_literals_are_coerced_in_custom_parameters():
+    """Use Typo Metrics = :false sets the OS/2 bit the source turns off."""
+    d = v4_dict(customParameters=[{"name": "Use Typo Metrics", "value": ":false"}])
+    glyphs4to3.normalize(d)
+    assert d["customParameters"][0]["value"] == 0
+
+
+def test_boolean_literals_are_coerced_deep_in_layers():
+    d = v4_dict()
+    only_layer(d)["visible"] = ":true"
+    only_shape(d)["closed"] = ":true"
+    glyphs4to3.normalize(d)
+    assert only_layer(d)["visible"] == 1
+    assert only_shape(d)["closed"] == 1
+
+
+def test_boolean_literals_inside_userdata_are_left_alone():
+    """Free-form author content; ":false" there could be a real string."""
+    d = v4_dict()
+    d["glyphs"][0]["userData"] = {"note": ":false", "nested": {"x": ":true"}}
+    glyphs4to3.normalize(d)
+    assert d["glyphs"][0]["userData"] == {"note": ":false", "nested": {"x": ":true"}}
+
+
+def test_the_count_of_coerced_literals_is_reported():
+    d = v4_dict(settings={"keepAlternatesTogether": ":true"})
+    d["glyphs"][0]["export"] = ":false"
+    result = glyphs4to3.normalize(d)
+    assert any("boolean literals coerced (2)" in line for line in result.renamed)
+
+
+def test_a_v3_source_keeps_its_literals():
+    """Documented invariant: format 2 and 3 sources are not touched at all."""
+    d = v3_dict(settings={"keepAlternatesTogether": ":false"})
+    glyphs4to3.normalize(d)
+    assert d["settings"]["keepAlternatesTogether"] == ":false"
+
+
+def test_boolean_literals_inside_nodes_are_left_alone():
+    """
+    Skipped for cost: nodes are the bulk of a source and their only format 4
+    addition that matters here, "hoi", is refused outright.
+    """
+    d = v4_dict()
+    only_shape(d)["nodes"][0] = [100, 200, "l", {"flag": ":false"}]
+    glyphs4to3.normalize(d)
+    assert only_shape(d)["nodes"][0][3] == {"flag": ":false"}
