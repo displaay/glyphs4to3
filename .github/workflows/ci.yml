@@ -1,0 +1,58 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lint-type:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e ".[dev]"
+      - run: ruff check src tests
+      - run: mypy
+
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.10", "3.11", "3.12", "3.13"]
+        # The conversion targets glyphsLib parser internals
+        # (Parser(format_version=...), parse_into_object, and the two
+        # format_version == 3 read guards), so it has to be exercised across
+        # the whole supported span rather than one pinned version.
+        glyphslib: ["==6.12.*", "==6.13.*", "<7"]
+    name: py${{ matrix.python }} glyphsLib${{ matrix.glyphslib }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "${{ matrix.python }}"
+      - run: pip install -e ".[dev]" "glyphsLib${{ matrix.glyphslib }}"
+      - run: pytest -q
+
+  schema-audit:
+    # The bucket lists are curated, so this checks them against the published
+    # schema. Informational: a new Glyphs release adding a format 4 element
+    # should show up here, not in a user's failed build.
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e ".[test]"
+      - name: Fetch the published Glyphs 4 schema
+        run: |
+          curl -sSfL -o glyphs-4.schema.json \
+            https://raw.githubusercontent.com/schriftgestalt/GlyphsSDK/Glyphs4/GlyphsFileFormat/Schemas/glyphs-4.schema.json
+      - run: pytest tests/test_schema_audit.py -q
+        env:
+          GLYPHS4_SCHEMA: glyphs-4.schema.json

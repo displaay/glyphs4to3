@@ -1,0 +1,81 @@
+[build-system]
+# hatchling >=1.27 for PEP 639 license expressions
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "glyphs4to3"
+# single source of truth: __version__ in src/glyphs4to3/__init__.py
+dynamic = ["version"]
+description = "Read a Glyphs 4 (.formatVersion = 4) source with a parser that only knows Glyphs 3."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Displaay" }]
+keywords = ["fonts", "glyphs", "glyphsapp", "glyphslib", "file-format"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Text Processing :: Fonts",
+    "Operating System :: OS Independent",
+    "Typing :: Typed",
+]
+# openstep-plist parses the source; glyphsLib supplies the object model the
+# result is parsed into and the two version-dependent readers this works
+# around. The conversion targets glyphsLib's parser internals
+# (Parser(format_version=...), parse_into_object) - see the maintenance notes
+# in the README before widening this range.
+dependencies = [
+    "openstep-plist>=0.5,<1",
+    "glyphsLib>=6.12,<7",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=7"]
+dev = ["pytest>=7", "pytest-cov", "ruff", "mypy"]
+
+[project.urls]
+Homepage = "https://github.com/displaay/glyphs4to3"
+Repository = "https://github.com/displaay/glyphs4to3"
+Issues = "https://github.com/displaay/glyphs4to3/issues"
+
+[tool.hatch.version]
+path = "src/glyphs4to3/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/glyphs4to3"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"src/glyphs4to3/py.typed" = "glyphs4to3/py.typed"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "N", "ANN"]
+# A parsed plist is dict[str, Any] by nature - the values are whatever the
+# file held - so the walk helpers are unavoidably typed `Any` at that boundary.
+ignore = ["ANN401"]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests build fixtures as dict literals and use short helpers; full
+# annotations add noise without value here.
+"tests/*" = ["ANN", "N"]
+
+[tool.mypy]
+python_version = "3.10"
+packages = ["glyphs4to3"]
+strict = true
+
+[[tool.mypy.overrides]]
+# glyphsLib and openstep_plist ship no type stubs.
+module = ["glyphsLib.*", "openstep_plist.*"]
+ignore_missing_imports = true
