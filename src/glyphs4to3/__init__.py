@@ -38,7 +38,14 @@ directly. See the README for how to check.
 
 from __future__ import annotations
 
-from .buckets import EDITOR_ONLY, IGNORED, UNSUPPORTED
+from .buckets import (
+    EDITOR_ONLY,
+    IGNORED,
+    NODE_TYPE_NAMES,
+    READABLE_NODE_TYPES,
+    UNSUPPORTED,
+    UNSUPPORTED_VALUES,
+)
 from .exceptions import (
     Glyphs4Error,
     UnknownFormatVersionError,
@@ -58,10 +65,13 @@ from .normalize import (
 )
 from .reader import Source, load, load_with_report, loads, loads_with_report
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 __all__ = [
     "EDITOR_ONLY",
+    "NODE_TYPE_NAMES",
+    "READABLE_NODE_TYPES",
+    "UNSUPPORTED_VALUES",
     "IGNORED",
     "MAX_REPORTED_LOCATIONS",
     "NEWEST_KNOWN_FORMAT_VERSION",

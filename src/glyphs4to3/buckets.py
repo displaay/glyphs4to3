@@ -47,6 +47,32 @@ UNSUPPORTED: Final[dict[str, str]] = {
     "layerAttr.coordinates": "layer coordinates that defer to an axis default",
 }
 
+#: Format 4 additions that are *values* rather than schema elements. The
+#: schema marks elements with ``"glyphsCondition": {"minVersion": 4}``, so a
+#: new legal value for an existing element carries no marker and the audit in
+#: tests/test_schema_audit.py cannot see it - which is exactly why these are
+#: kept out of the three audited buckets and listed separately here. The
+#: ``:true`` / ``:false`` serialiser literals are the other member of this
+#: category; they are coerced in normalize() rather than refused.
+UNSUPPORTED_VALUES: Final[dict[str, str]] = {
+    "node.type": "node curve types that no Glyphs 3 reader maps",
+}
+
+#: The node type letters ``GSNode.read_v3`` maps. It branches on the first
+#: character only - a trailing "s" means smooth - and every other letter falls
+#: through to ``node_type = None``, which is a node with no curve type: the
+#: outline is silently wrong rather than refused. Kept as an allowlist so a
+#: letter Glyphs adds tomorrow is refused too, not just the three seen so far.
+READABLE_NODE_TYPES: Final[frozenset[str]] = frozenset("colq")
+
+#: Human names for the format 4 node type letters seen so far, for the error
+#: message. An unlisted letter is still refused, just not named.
+NODE_TYPE_NAMES: Final[dict[str, str]] = {
+    "u": "quartic",
+    "h": "Hobby",
+    "r": "Raph New Spiral",
+}
+
 #: The format 4 additions to a shape's ``attr`` dict - new gradient forms, new
 #: stroke and line-join values, opacity, compositing, masking.
 _SHAPE_ATTR: Final[str] = (
@@ -70,7 +96,9 @@ IGNORED: Final[dict[str, str]] = {
                                  "NOT verified against a real source - no "
                                  "format 4 sample using it has turned up yet",
     "node": "the node tuple gained an optional fourth element; "
-            "GSNode.read_v3 already accepts one and reads it as userData",
+            "GSNode.read_v3 already accepts one and reads it as userData. The "
+            "*type* letter also gained format 4 values, but those are values "
+            "rather than schema elements - see UNSUPPORTED_VALUES",
     "nodeAttr": "the fourth node element itself; only its 'hoi' key has no "
                 "format 3 equivalent, and that is in UNSUPPORTED",
     "shape": "the shape union gained the shapeGroup member, which is refused "

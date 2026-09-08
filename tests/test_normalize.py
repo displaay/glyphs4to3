@@ -270,6 +270,58 @@ def test_a_fourth_node_element_that_is_userdata_is_fine():
     assert glyphs4to3.find_unsupported(d) == []
 
 
+def test_unmapped_node_types_are_rejected():
+    """
+    GSNode.read_v3 branches on c/o/l/q and leaves every other letter as
+    type=None, so the node keeps its position and loses its curve type: the
+    font compiles, validates, and draws the wrong outline.
+    """
+    d = v4_dict()
+    d["glyphs"][0]["glyphname"] = "aacute"
+    only_layer(d)["name"] = "Bold"
+    only_shape(d)["nodes"][1] = [300, 400, "h"]
+
+    findings = glyphs4to3.find_unsupported(d)
+    message = glyphs4to3.unsupported_message(findings)
+    assert "node.type" in message
+    assert "h (Hobby)" in message
+    assert "'aacute'" in message
+    assert "'Bold'" in message
+
+
+def test_unknown_node_type_letter_is_rejected_unnamed():
+    """The allowlist refuses a letter Glyphs adds after this was written."""
+    d = v4_dict()
+    only_shape(d)["nodes"][1] = [300, 400, "z"]
+
+    message = glyphs4to3.unsupported_message(glyphs4to3.find_unsupported(d))
+    assert "node.type" in message
+    assert "(z)" in message
+
+
+def test_smooth_and_plain_node_types_are_fine():
+    """read_v3 reads a trailing "s" as smooth, so "cs"/"ls" are format 3."""
+    d = v4_dict()
+    only_shape(d)["nodes"] = [
+        [50, 0, "l"],
+        [450, 0, "cs"],
+        [450, 700, "o"],
+        [300, 750, "qs"],
+    ]
+    assert glyphs4to3.find_unsupported(d) == []
+
+
+def test_an_unmapped_node_type_is_not_hidden_by_an_hoi_node():
+    """Both are reported: the walk used to stop at the first hoi node."""
+    d = v4_dict()
+    only_shape(d)["nodes"][0] = [50, 0, "l", {"hoi": {"wght": {"ip": [1, 2]}}}]
+    only_shape(d)["nodes"][1] = [300, 400, "h"]
+
+    message = glyphs4to3.unsupported_message(glyphs4to3.find_unsupported(d))
+    assert "nodeAttr.hoi" in message
+    assert "node.type" in message
+
+
 def test_shape_groups_are_rejected():
     """
     _parse_shapes_dict branches on "ref" and otherwise builds a GSPath, so a

@@ -138,6 +138,7 @@ None of these can affect a compiled font.
 | contextual kerning | a non-empty top-level `kerningContext` |
 | format 4 smart glyph axes | `glyphs[].axes` |
 | deferred layer coordinates | a brace coordinate that is not a number |
+| unmapped node curve types | a node type letter outside `c` / `o` / `l` / `q` |
 
 These are refused rather than dropped on purpose: a discarded shape group or
 higher-order interpolation node produces a font that compiles, validates and
@@ -148,6 +149,14 @@ interpolates linearly and has nowhere to put higher-order interpolation either.
 
 The message names every offending feature and the glyphs and layers it was
 found on, because the caller usually has nothing else to report.
+
+The node types are an allowlist, not a list of the three letters seen so far
+(`u` quartic, `h` Hobby, `r` Raph New Spiral). `GSNode.read_v3` branches on the
+first character and leaves every other letter as `type=None` — a node that keeps
+its position and loses its curve type — so a letter Glyphs adds tomorrow is
+refused as well. Like the `:true` / `:false` literals this is a *value*, not a
+schema element, so the bucket audit cannot see it; both are listed in
+`UNSUPPORTED_VALUES` instead.
 
 **Deliberately not refused.** The format 4 additions to a shape's `attr` dict —
 new gradient forms, `opacity`, `compositing`, `mask`, `strokeGradient`, new

@@ -8,7 +8,15 @@ from collections.abc import Iterator
 from dataclasses import dataclass, field
 from typing import Any
 
-from .buckets import EDITOR_ONLY, IGNORED, UNSUPPORTED, editor_only_by_scope
+from .buckets import (
+    EDITOR_ONLY,
+    IGNORED,
+    NODE_TYPE_NAMES,
+    READABLE_NODE_TYPES,
+    UNSUPPORTED,
+    UNSUPPORTED_VALUES,
+    editor_only_by_scope,
+)
 from .exceptions import UnknownFormatVersionError
 
 LOGGER = logging.getLogger(__name__)
@@ -159,7 +167,9 @@ def find_unsupported(source: PlistDict) -> list[Finding]:
                 for node in _nodes(shape.get("nodes")):
                     if _has_node_attributes(node):
                         add("nodeAttr.hoi", where)
-                        break
+                    unmapped = _unmapped_node_type(node)
+                    if unmapped is not None:
+                        add("node.type", f"{where} ({unmapped})")
     return findings
 
 
@@ -175,7 +185,7 @@ def unsupported_message(findings: list[Finding]) -> str:
 
     lines = [_UNSUPPORTED_INTRO]
     for (feature, locations) in by_feature.items():
-        described = UNSUPPORTED.get(feature, feature)
+        described = UNSUPPORTED.get(feature) or UNSUPPORTED_VALUES.get(feature, feature)
         named = [where for where in locations if where]
         if not named:
             lines.append(f"- {described} ({feature}): font level")
@@ -461,6 +471,28 @@ def _has_node_attributes(node: Any) -> bool:
     if not isinstance(node, list) or len(node) < 4:
         return False
     return isinstance(node[3], dict) and "hoi" in node[3]
+
+
+def _unmapped_node_type(node: Any) -> str | None:
+    """The node's type letter, when no Glyphs 3 reader maps it.
+
+    ``GSNode.read_v3`` branches on the first character (c/o/l/q, with a
+    trailing "s" for smooth) and leaves everything else as ``type=None``. A
+    node with no curve type does not fail the build - it silently draws the
+    wrong outline - so this is refused for the same reason as ``hoi``.
+
+    :returns: ``"h (Hobby)"``-style text for the message, or None when the
+        node is readable or is not a node at all.
+    """
+    if not isinstance(node, list) or len(node) < 3:
+        return None
+    token = node[2]
+    if not isinstance(token, str) or not token:
+        return None
+    if token[0] in READABLE_NODE_TYPES:
+        return None
+    name = NODE_TYPE_NAMES.get(token[0])
+    return f"{token} ({name})" if name else token
 
 
 def _has_deferred_coordinates(layer: PlistDict) -> bool:
