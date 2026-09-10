@@ -77,8 +77,18 @@ def loads(text: str) -> GSFont:
 def load_with_report(source: Source) -> tuple[GSFont, NormalizeReport]:
     """Read a .glyphs source from a path or open file.
 
+    The bytes are read as UTF-8, which is what Glyphs.app has written for
+    years. A source that started life in an older version keeps the odd
+    MacRoman byte, and this raises ``UnicodeDecodeError`` on it, pointing at a
+    byte offset rather than a string. Decoding is deliberately not this
+    package's business - it is about the file *format*, not its bytes - so a
+    caller that may be handed such a source should decode first, or use
+    ``glyphs_source_prep.load_source``, which does both steps in the order
+    they have to happen.
+
     :param source: A filesystem path, or a file open in text or binary mode.
     :returns: ``(font, report)``, as :func:`loads_with_report`.
+    :raises UnicodeDecodeError: The file is not valid UTF-8. See above.
     """
     return loads_with_report(_read_text(source))
 
