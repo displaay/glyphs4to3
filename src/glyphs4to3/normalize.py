@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import collections
 import logging
-from collections.abc import Iterator
+from collections.abc import Collection, Iterator
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -132,16 +132,27 @@ def source_format_version(source: PlistDict) -> int:
     return version
 
 
-def find_unsupported(source: PlistDict) -> list[Finding]:
+def find_unsupported(source: PlistDict, *, allow: Collection[str] = ()) -> list[Finding]:
     """Look for format 4 constructs that cannot be converted.
 
     Pure - does not modify ``source``. Collects *everything* in one pass, so
     that a file with two problems reports both at once rather than making the
     author fix them one round trip at a time.
 
+    :param allow: Keys of :data:`UNSUPPORTED` the caller handles itself, so
+        they are not reported. Only ``"nodeAttr.hoi"`` makes sense today: the
+        node keeps its ``hoi`` attribute, which glyphsLib reads into the
+        node's ``userData`` exactly as it does from a format 3 file Glyphs 4
+        wrote - and which glyphsLib then *ignores*, interpolating in straight
+        lines. Allow it only when something bakes it before the build
+        (``glyphs_source_prep.bake_hoi``).
     :returns: A list of :class:`Finding`, empty for a format 2 or 3 source.
     :raises UnknownFormatVersionError: see :func:`source_format_version`.
+    :raises ValueError: ``allow`` names a feature that is not refusable.
     """
+    unknown = set(allow) - set(UNSUPPORTED)
+    if unknown:
+        raise ValueError(f"cannot allow unknown feature(s): {sorted(unknown)}")
     if source_format_version(source) < 4:
         return []
 
@@ -149,7 +160,7 @@ def find_unsupported(source: PlistDict) -> list[Finding]:
     seen: set[tuple[str, str | None]] = set()
 
     def add(feature: str, where: str | None = None) -> None:
-        if (feature, where) in seen:
+        if feature in allow or (feature, where) in seen:
             return
         seen.add((feature, where))
         findings.append(Finding(feature, where))
