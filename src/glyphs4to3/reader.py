@@ -11,6 +11,7 @@ plist layer is version agnostic - so no text is ever re-serialised.
 from __future__ import annotations
 
 import os
+from collections.abc import Collection
 from typing import IO, Any, Union
 
 import glyphsLib.classes
@@ -31,10 +32,14 @@ from .normalize import (
 Source = Union[str, "os.PathLike[str]", IO[str], IO[bytes]]
 
 
-def loads_with_report(text: str) -> tuple[GSFont, NormalizeReport]:
+def loads_with_report(
+    text: str, *, allow: Collection[str] = ()
+) -> tuple[GSFont, NormalizeReport]:
     """Read a .glyphs source from a string, converting Glyphs 4 if needed.
 
     :param text: The text content of the .glyphs file.
+    :param allow: Refusals the caller handles itself, see
+        :func:`find_unsupported`.
     :returns: ``(font, report)``. ``report.converted`` is False for a format 2
         or 3 source, which takes the same path glyphsLib would have taken.
     :raises UnsupportedSourceError: The source uses a format 4 construct that
@@ -46,7 +51,7 @@ def loads_with_report(text: str) -> tuple[GSFont, NormalizeReport]:
     # exactly as they do through glyphsLib.
     source: PlistDict = openstep_plist.loads(text, use_numbers=True)
 
-    findings = find_unsupported(source)
+    findings = find_unsupported(source, allow=allow)
     if findings:
         raise UnsupportedSourceError(unsupported_message(findings))
 

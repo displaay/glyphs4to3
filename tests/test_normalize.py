@@ -552,6 +552,29 @@ def test_loads_rejects_a_bucket_c_source():
     assert "nodeAttr.hoi" in str(excinfo.value)
 
 
+def test_hoi_can_be_allowed_by_a_caller_that_bakes_it():
+    """The node keeps its hoi, in userData, as a format 3 file Glyphs 4 wrote."""
+    d = v4_dict()
+    only_shape(d)["nodes"][0] = [100, 200, "l", {"hoi": {"wght": {"ip": [1, 2]}}}]
+    assert glyphs4to3.find_unsupported(d, allow=["nodeAttr.hoi"]) == []
+    (font, _report) = glyphs4to3.loads_with_report(to_text(d), allow=["nodeAttr.hoi"])
+    node = font.glyphs[0].layers[0].paths[0].nodes[0]
+    assert node.userData["hoi"] == {"wght": {"ip": [1, 2]}}
+
+
+def test_allowing_hoi_does_not_allow_anything_else():
+    d = v4_dict()
+    only_shape(d)["nodes"][0] = [100, 200, "l", {"hoi": {}}]
+    d["kerningContext"] = {"m01": {"a": {"b": -10}}}
+    findings = glyphs4to3.find_unsupported(d, allow=["nodeAttr.hoi"])
+    assert [f.feature for f in findings] == ["kerningContext"]
+
+
+def test_allowing_an_unknown_feature_is_an_error():
+    with pytest.raises(ValueError):
+        glyphs4to3.find_unsupported(v4_dict(), allow=["nodeAttr.typo"])
+
+
 # -- the :true / :false serialiser literals --------------------------------
 #
 # Not a schema element - it turns up wherever Glyphs 4 writes a boolean.
