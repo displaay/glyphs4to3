@@ -12,6 +12,7 @@ import logging
 import glyphsLib
 import openstep_plist
 import pytest
+from fontTools.pens.boundsPen import BoundsPen
 
 import glyphs4to3
 
@@ -77,8 +78,11 @@ def decomposed_width(d):
         if d[".formatVersion"] == 3 else glyphs4to3.loads(
             openstep_plist.dumps(d, sort_keys=False))
     ufo = glyphsLib.to_ufos(font, minimal=True)[0]
-    xs = [pt.x for contour in ufo["B"] for pt in contour]
-    return max(xs)
+    # decomposed here, because whether glyphsLib leaves a smart component that
+    # sits at its default as a plain component differs between versions
+    pen = BoundsPen(ufo)
+    ufo["B"].draw(pen)
+    return pen.bounds[2]
 
 
 # -- the conversion --------------------------------------------------------
