@@ -154,7 +154,7 @@ keys that default to true: `glyph.export = :false` would load as `export ==
 True` and compile every non-exporting helper glyph into the font, and a custom
 parameter `Use Typo Metrics = :false` would set the OS/2 bit the source turns
 off. Coerced everywhere except `userData` (free-form author content) and
-`nodes` (cost — and their only format 4 addition is refused anyway).
+`nodes` (cost — and their only format 4 addition, `hoi`, holds no booleans).
 
 **Editor state — dropped and counted.** `fontMaster.active`, `layer.active`,
 `glyph.group`, `glyph.groupIdx`, `guide.attr`, `guide.slope`,
@@ -183,6 +183,20 @@ interpolates linearly and has nowhere to put higher-order interpolation either.
 
 The message names every offending feature and the glyphs and layers it was
 found on, because the caller usually has nothing else to report.
+
+**A caller that handles a refusal itself** passes it in `allow`:
+`find_unsupported()`, `loads_with_report()`, `loads()`, `load()` and
+`load_with_report()` all take `allow=("nodeAttr.hoi",)`. Only the keys of
+`UNSUPPORTED` can be allowed (anything else is a `ValueError`), and the only
+one that makes sense today is higher-order interpolation: the node keeps its
+`hoi` in `userData`, exactly as from a format 3 file Glyphs 4 wrote, and
+`report.allowed` counts where it was found. glyphsLib still interpolates such
+a node in straight lines, so allow it only when something replaces it before
+the build - `glyphs_source_prep.bake_hoi()` bakes it into intermediate layers.
+
+Note that a *format 3* file saved by Glyphs 4 carries the same `hoi` and is
+not refused: format 2 and 3 sources take glyphsLib's own path untouched. Use
+`glyphs_source_prep.find_hoi()` to detect it there.
 
 The node types are an allowlist, not a list of the three letters seen so far
 (`u` quartic, `h` Hobby, `r` Raph New Spiral). `GSNode.read_v3` branches on the
