@@ -157,7 +157,7 @@ off. Coerced everywhere except `userData` (free-form author content) and
 `nodes` (cost — and their only format 4 addition is refused anyway).
 
 **Editor state — dropped and counted.** `fontMaster.active`, `layer.active`,
-`glyph.group`, `glyph.groupIdx`, `anchor.attr`, `guide.attr`, `guide.slope`,
+`glyph.group`, `glyph.groupIdx`, `guide.attr`, `guide.slope`,
 `image.attr`, `settings.dependencies`, `shapeAttr.hidden`, `instances[].id`.
 None of these can affect a compiled font.
 

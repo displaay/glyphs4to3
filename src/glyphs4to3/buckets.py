@@ -14,7 +14,11 @@ demand and is the only defence against a new format 4 key being read as an
 inert attribute; glyphsLib's ``GSBase.__setitem__`` is a plain ``setattr``, so
 it accepts any key without complaint and the font then builds with a default.
 
-Audited against glyphs-4.schema.json on 2026-09-08.
+Audited against glyphs-4.schema.json on 2026-11-26.
+
+Since 2026-09-08 the schema re-marked ``anchor.attr`` as a format 3 element
+(format 4 only moved the anchor's user data into it), so it is no longer
+dropped: a Glyphs 3 file carries it too and glyphsLib reads that one as it is.
 """
 
 from __future__ import annotations
@@ -29,7 +33,6 @@ EDITOR_ONLY: Final[dict[str, str]] = {
     "glyph.group": "the glyph's group in the font view sidebar",
     "glyph.groupIdx": "the glyph's position within that group",
     "layer.active": "whether the layer is shown in the editor",
-    "anchor.attr": "editor-side anchor attributes; the position is separate",
     "guide.attr": "editor-side guide attributes",
     "guide.slope": "an editor guide property; guides never reach the outlines",
     "image.attr": "attributes of the placed background image",
@@ -94,6 +97,8 @@ IGNORED: Final[dict[str, str]] = {
              "palette entry",
     "palettes": "the format 4 form of the Color Palettes custom parameter",
     "lineCap": "new stroke cap alignment modes",
+    "hint": "a format 4 validation rule on hints (which types need a target); "
+            "Glyphs hints do not survive into a compiled font here",
     "hint.type": "new hint types; Glyphs hints do not survive into a compiled "
                  "font here anyway",
     "component.traverseAnchors": "a component flag about anchor propagation. "

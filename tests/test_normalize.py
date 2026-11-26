@@ -198,7 +198,6 @@ def test_editor_only_keys_are_dropped():
     d["glyphs"][0]["group"] = "Letters"
     d["glyphs"][0]["groupIdx"] = 3
     only_layer(d)["active"] = 1
-    only_layer(d)["anchors"] = [{"name": "top", "pos": [1, 2], "attr": {}}]
     only_shape(d)["attr"] = {"hidden": 1}
     d["settings"] = {"gridLength": 2, "dependencies": {"a": "b"}}
 
@@ -209,7 +208,6 @@ def test_editor_only_keys_are_dropped():
     assert "group" not in d["glyphs"][0]
     assert "groupIdx" not in d["glyphs"][0]
     assert "active" not in only_layer(d)
-    assert "attr" not in only_layer(d)["anchors"][0]
     assert "hidden" not in only_shape(d)["attr"]
     assert "dependencies" not in d["settings"]
     # the grid keys are NOT a version 4 change - glyphsLib reads them from

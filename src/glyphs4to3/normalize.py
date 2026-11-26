@@ -455,8 +455,6 @@ def _drop_editor_only(source: PlistDict, report: NormalizeReport) -> None:
         _drop_keys(glyph, "glyph", report)
         for (_name, layer) in _layers(glyph):
             _drop_keys(layer, "layer", report)
-            for anchor in _dicts(layer.get("anchors")):
-                _drop_keys(anchor, "anchor", report)
             for guide in _dicts(layer.get("guides")):
                 _drop_keys(guide, "guide", report)
             image = layer.get("backgroundImage")
