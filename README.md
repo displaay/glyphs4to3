@@ -31,7 +31,7 @@ Format 4 uses the format 3 form for **both**, so telling the parser the source
 is format 3 is correct rather than a workaround.
 
 What actually differs is a handful of relocated keys, some editor state, and
-five constructs with no format 3 equivalent. This package converts the first,
+a few constructs with no format 3 equivalent. This package converts the first,
 drops the second and refuses the third.
 
 `glyphsLib.parser.loads()` is only `openstep_plist.loads()` followed by
@@ -111,6 +111,39 @@ wins.
 Without these a format 4 font loads as `"Unnamed font"` with every instance
 called `"Regular"` and unnamed designspace axes.
 
+**Smart glyph axes — converted where format 3 can say the same.** Format 3
+describes a smart glyph with `partsSettings` (`{name, bottomValue, topValue}`)
+and marks the master and pole layers with `partSelection` (`1` bottom, `2`
+top). Format 4 gives the glyph real `axes` (`{name, tag, default, hidden}`,
+`default` 0 when absent); the master layer sits at the defaults and each pole
+is a layer associated with its master whose `attr.coordinates` list the font
+axes followed by the glyph's own (`-` meaning the axis default). That is the
+same model, and it is rewritten into the format 3 form, when:
+
+* every smart axis has exactly two positions, the default and one other, both
+  whole numbers (`bottomValue` / `topValue` are integers),
+* every pole layer sits exactly on its master in the font axes and is not
+  also a bracket or colour layer,
+* no two layers of a master share a smart location,
+* every master has the same poles. glyphsLib builds a separate model per
+  master, so a master without the others' poles would silently draw the
+  plain default there.
+
+Anything else — a third position, a pole between masters — is refused under
+`glyph.axes` with the reason. An axis no layer moves along varies nothing and
+is dropped; a glyph left without axes is an ordinary glyph.
+
+Glyphs 4 also writes *font* axis names into a component's `piece`, and it
+reads them: `piece = {Weight = 100; Width = 20;}` on a Black layer draws the
+part as it is at Weight 100. Format 3 has no way to say that and glyphsLib
+raises `KeyError` on any `piece` key that is not one of the glyph's smart
+axes. So a font axis key whose value is just the location of the layer the
+component sits on — what the editor normally writes — is removed, and one with
+any other value is refused under `component.piece`, naming the glyph, layer
+and value. (Checked against a variable font exported by Glyphs 4.2: those are
+exactly the glyphs that come out differently.) The same applies to smart
+glyphs a format 4 file still describes with `partsSettings`.
+
 **Serialiser quirks — normalised.** Both schemas say a boolean is `1` or `0`,
 but a Glyphs 4 source writes `keepAlternatesTogether = :true`, which arrives
 from the plist parser as the *string* `":true"`. glyphsLib then applies
@@ -136,9 +169,10 @@ None of these can affect a compiled font.
 | shape groups | a shape that is neither a component nor a path |
 | higher-order interpolation | a node whose fourth element carries `hoi` |
 | contextual kerning | a non-empty top-level `kerningContext` |
-| format 4 smart glyph axes | `glyphs[].axes` |
+| smart glyph axes format 3 cannot describe | `glyphs[].axes` that fail the conversion below |
 | deferred layer coordinates | a brace coordinate that is not a number |
 | unmapped node curve types | a node type letter outside `c` / `o` / `l` / `q` |
+| a smart part at another font location | a font axis value in a component `piece` that differs from its layer |
 
 These are refused rather than dropped on purpose: a discarded shape group or
 higher-order interpolation node produces a font that compiles, validates and

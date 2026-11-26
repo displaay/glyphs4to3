@@ -391,14 +391,7 @@ def test_empty_smart_glyph_axes_are_not_rejected():
     assert glyphs4to3.find_unsupported(d) == []
 
 
-def test_version_4_smart_glyph_axes_are_rejected():
-    """
-    Not a rename of partsSettings: that key still exists in version 4 and
-    holds a different shape.
-    """
-    d = v4_dict()
-    d["glyphs"][0]["axes"] = [{"name": "Height", "tag": "HGHT"}]
-    assert any(f.feature == "glyph.axes" for f in glyphs4to3.find_unsupported(d))
+# Version 4 smart glyph axes: see test_smart.py
 
 
 @pytest.mark.parametrize("attr", [

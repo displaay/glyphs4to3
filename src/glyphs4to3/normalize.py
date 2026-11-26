@@ -18,6 +18,15 @@ from .buckets import (
     editor_only_by_scope,
 )
 from .exceptions import UnknownFormatVersionError
+from .smart import (
+    FontAxes,
+    SmartPlan,
+    apply_smart_plan,
+    clean_piece_values,
+    plan_smart_glyph,
+    relocated_pieces,
+    smart_axes_by_glyph,
+)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -150,16 +159,25 @@ def find_unsupported(source: PlistDict) -> list[Finding]:
     if source.get("kerningContext"):
         add("kerningContext")
 
+    font_axes: FontAxes | None = None
+    plans: dict[str, SmartPlan] = {}
     for glyph in _dicts(source.get("glyphs")):
         name = glyph.get("glyphname", "?")
-        if glyph.get("axes"):
-            # Not a rename of partsSettings: that key still exists in format 4
-            # and holds {name, bottomValue, topValue}, while these are full
-            # axes of {name, tag, default, hidden}.
-            add("glyph.axes", f"glyph {name!r}")
+        # A smart glyph's layer coordinates also hold its own axes, where "-"
+        # is just that axis' default; the plan checks them instead.
+        smart = bool(glyph.get("axes"))
+        if smart:
+            # Converted into partsSettings by normalize() where format 3 can
+            # say the same thing - see glyphs4to3.smart.
+            font_axes = font_axes or FontAxes.of(source)
+            plan = plan_smart_glyph(glyph, font_axes)
+            if isinstance(plan, str):
+                add("glyph.axes", f"glyph {name!r}: {plan}")
+            else:
+                plans[str(name)] = plan
         for (layer_name, layer) in _layers(glyph):
             where = f"glyph {name!r} layer {layer_name!r}"
-            if _has_deferred_coordinates(layer):
+            if not smart and _has_deferred_coordinates(layer):
                 add("layerAttr.coordinates", where)
             for shape in _dicts(layer.get("shapes")):
                 if _is_shape_group(shape):
@@ -170,6 +188,12 @@ def find_unsupported(source: PlistDict) -> list[Finding]:
                         add("nodeAttr.hoi", where)
                     if unmapped is not None:
                         add("node.type", f"{where} ({unmapped})")
+
+    axes_by_glyph = smart_axes_by_glyph(source, plans)
+    if axes_by_glyph:
+        font_axes = font_axes or FontAxes.of(source)
+        for where in relocated_pieces(source, axes_by_glyph, font_axes):
+            add("component.piece", where)
     return findings
 
 
@@ -223,6 +247,7 @@ def normalize(source: PlistDict) -> NormalizeReport:
     _rename_family_name(source, report)
     _rename_instance_names(source, report)
     _rename_axis_names(source, report)
+    _convert_smart_glyphs(source, report)
     _drop_editor_only(source, report)
     _coerce_app_version(source, report)
     _set_format_version_first(source)
@@ -280,6 +305,44 @@ def _rename_axis_names(source: PlistDict, report: NormalizeReport) -> None:
         renamed += 1
     if renamed:
         report.renamed.append(f"axis names -> axis name ({renamed})")
+
+
+def _convert_smart_glyphs(source: PlistDict, report: NormalizeReport) -> None:
+    """Rewrite format 4 smart glyph axes as partsSettings / partSelection.
+
+    A glyph that cannot be converted is left alone; refusing it is
+    :func:`find_unsupported`'s job, and glyphsLib ignores a leftover "axes".
+    """
+    font_axes = FontAxes.of(source)
+    plans: dict[str, SmartPlan] = {}
+    for glyph in _dicts(source.get("glyphs")):
+        if not glyph.get("axes"):
+            continue
+        plan = plan_smart_glyph(glyph, font_axes)
+        if isinstance(plan, str):
+            continue
+        apply_smart_plan(glyph, plan)
+        plans[str(glyph.get("glyphname"))] = plan
+    if plans:
+        report.renamed.append(f"smart glyph axes -> partsSettings ({len(plans)})")
+    axes_by_glyph = smart_axes_by_glyph(source, plans)
+    if not axes_by_glyph:
+        return
+    cleanup = clean_piece_values(source, axes_by_glyph, font_axes)
+    if cleanup.total:
+        report.renamed.append(
+            f"smart component values for non-smart axes dropped ({cleanup.total})"
+        )
+    if cleanup.relocated:
+        # find_unsupported refuses these; a caller that skipped it gets the
+        # part at the layer's own location instead, so say so
+        shown = cleanup.relocated[:MAX_REPORTED_LOCATIONS]
+        more = len(cleanup.relocated) - len(shown)
+        LOGGER.warning(
+            "Dropped smart component values that place a part at another font "
+            "location, which Glyphs 4 would draw differently: %s%s",
+            "; ".join(shown), f" and {more} more" if more > 0 else "",
+        )
 
 
 def _coerce_boolean_literals(source: PlistDict, report: NormalizeReport) -> None:

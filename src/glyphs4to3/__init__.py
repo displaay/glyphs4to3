@@ -11,7 +11,7 @@ The failure is narrow. For *reading*, glyphsLib branches on the format version
 in exactly two places: the node shape and decimal-versus-hex code points. Format
 4 uses the format 3 form for both, so telling the parser the source is format 3
 is correct rather than a workaround. What actually differs is a handful of
-relocated keys, some editor state, and five constructs with no format 3
+relocated keys, some editor state, and a few constructs with no format 3
 equivalent.
 
 Use it wherever you would have called glyphsLib::

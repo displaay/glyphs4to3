@@ -41,7 +41,7 @@ EDITOR_ONLY: Final[dict[str, str]] = {
 #: error message. Refused rather than dropped - see UnsupportedSourceError.
 UNSUPPORTED: Final[dict[str, str]] = {
     "kerningContext": "contextual kerning",
-    "glyph.axes": "smart glyph axes in the format 4 form",
+    "glyph.axes": "smart glyph axes with no format 3 equivalent",
     "shapeGroup": "shape groups",
     "nodeAttr.hoi": "higher-order interpolation nodes",
     "layerAttr.coordinates": "layer coordinates that defer to an axis default",
@@ -56,6 +56,10 @@ UNSUPPORTED: Final[dict[str, str]] = {
 #: category; they are coerced in normalize() rather than refused.
 UNSUPPORTED_VALUES: Final[dict[str, str]] = {
     "node.type": "node curve types that no Glyphs 3 reader maps",
+    # "piece" itself is format 3; what is new is Glyphs 4 reading font axis
+    # names in it - see glyphs4to3.smart
+    "component.piece": "smart component values that place a part at another "
+                       "font location",
 }
 
 #: The node type letters ``GSNode.read_v3`` maps. It branches on the first
