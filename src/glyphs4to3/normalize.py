@@ -93,12 +93,20 @@ class NormalizeReport:
     converted: bool = False
     renamed: list[str] = field(default_factory=list)
     dropped: collections.Counter[str] = field(default_factory=collections.Counter)
+    #: Refusals the caller allowed, by feature, counted per place found - the
+    #: trace that a caller took over e.g. HOI and has to handle it.
+    allowed: collections.Counter[str] = field(default_factory=collections.Counter)
 
     def summary(self) -> str:
         """A single line describing the conversion."""
         parts = [f"format {self.source_version} -> {TARGET_FORMAT_VERSION}"]
         if self.renamed:
             parts.append("; ".join(self.renamed))
+        if self.allowed:
+            parts.append(
+                "allowed "
+                + ", ".join(f"{k} ({n})" for (k, n) in sorted(self.allowed.items()))
+            )
         if self.dropped:
             parts.append(f"{sum(self.dropped.values())} editor-only keys dropped")
         return ", ".join(parts)
@@ -148,11 +156,11 @@ def find_unsupported(source: PlistDict, *, allow: Collection[str] = ()) -> list[
         (``glyphs_source_prep.bake_hoi``).
     :returns: A list of :class:`Finding`, empty for a format 2 or 3 source.
     :raises UnknownFormatVersionError: see :func:`source_format_version`.
-    :raises ValueError: ``allow`` names a feature that is not refusable.
+    :raises ValueError: ``allow`` names something other than a key of
+        :data:`UNSUPPORTED` (the values in :data:`UNSUPPORTED_VALUES` cannot
+        be allowed: nothing could handle them after glyphsLib has read them).
     """
-    unknown = set(allow) - set(UNSUPPORTED)
-    if unknown:
-        raise ValueError(f"cannot allow unknown feature(s): {sorted(unknown)}")
+    allowed = allowed_features(allow)
     if source_format_version(source) < 4:
         return []
 
@@ -160,7 +168,7 @@ def find_unsupported(source: PlistDict, *, allow: Collection[str] = ()) -> list[
     seen: set[tuple[str, str | None]] = set()
 
     def add(feature: str, where: str | None = None) -> None:
-        if feature in allow or (feature, where) in seen:
+        if feature in allowed or (feature, where) in seen:
             return
         seen.add((feature, where))
         findings.append(Finding(feature, where))
@@ -206,6 +214,23 @@ def find_unsupported(source: PlistDict, *, allow: Collection[str] = ()) -> list[
         for where in relocated_pieces(source, axes_by_glyph, font_axes):
             add("component.piece", where)
     return findings
+
+
+def allowed_features(allow: Collection[str]) -> frozenset[str]:
+    """Validate an ``allow`` argument, see :func:`find_unsupported`.
+
+    :raises TypeError: ``allow`` is a single string, not a collection of them.
+    :raises ValueError: It names a feature that cannot be allowed.
+    """
+    if isinstance(allow, str):
+        raise TypeError(f"allow takes a collection of feature names, not {allow!r}")
+    allowed = frozenset(allow)
+    unknown = allowed - set(UNSUPPORTED)
+    if unknown:
+        raise ValueError(
+            f"cannot allow {sorted(unknown)}: only keys of UNSUPPORTED can be allowed"
+        )
+    return allowed
 
 
 def unsupported_message(findings: list[Finding]) -> str:
@@ -380,7 +405,9 @@ def _coerce_boolean_literals(source: PlistDict, report: NormalizeReport) -> None
     for cost - it is the bulk of a source (16 200 nodes in the file this was
     measured on, and walking them doubled the load time) and holds
     coordinates, a type string and, in format 4, an attribute dict whose only
-    key that matters here is ``hoi``, which is refused outright. Everywhere
+    key that matters here is ``hoi`` - refused, or passed through as it is to
+    a caller that allowed it; its values are numbers, points, ``"auto"``,
+    ``"cw"`` and ``"ccw"``, never a boolean literal. Everywhere
     else the value ``":false"`` has no legitimate meaning.
     """
     coerced = _coerce_booleans_in(source)

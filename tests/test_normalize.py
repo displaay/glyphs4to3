@@ -557,9 +557,37 @@ def test_hoi_can_be_allowed_by_a_caller_that_bakes_it():
     d = v4_dict()
     only_shape(d)["nodes"][0] = [100, 200, "l", {"hoi": {"wght": {"ip": [1, 2]}}}]
     assert glyphs4to3.find_unsupported(d, allow=["nodeAttr.hoi"]) == []
-    (font, _report) = glyphs4to3.loads_with_report(to_text(d), allow=["nodeAttr.hoi"])
+    (font, report) = glyphs4to3.loads_with_report(to_text(d), allow=["nodeAttr.hoi"])
     node = font.glyphs[0].layers[0].paths[0].nodes[0]
     assert node.userData["hoi"] == {"wght": {"ip": [1, 2]}}
+    # leaves a trace that the caller has to handle it
+    assert report.allowed == {"nodeAttr.hoi": 1}
+    assert "allowed nodeAttr.hoi (1)" in report.summary()
+
+
+def test_allow_reaches_every_reader(tmp_path):
+    d = v4_dict()
+    only_shape(d)["nodes"][0] = [100, 200, "l", {"hoi": {"wght": {"ip": [1, 2]}}}]
+    path = tmp_path / "hoi.glyphs"
+    path.write_text(to_text(d), encoding="utf-8")
+    allow = ("nodeAttr.hoi",)
+    for font in (
+        glyphs4to3.loads(to_text(d), allow=allow),
+        glyphs4to3.load(path, allow=allow),
+        glyphs4to3.load_with_report(path, allow=allow)[0],
+    ):
+        assert font.glyphs[0].layers[0].paths[0].nodes[0].userData["hoi"]
+    with pytest.raises(glyphs4to3.UnsupportedSourceError):
+        glyphs4to3.load(path)
+
+
+def test_allow_is_read_once():
+    """A generator works, a bare string is a mistake rather than letters."""
+    d = v4_dict()
+    only_shape(d)["nodes"][0] = [100, 200, "l", {"hoi": {}}]
+    assert glyphs4to3.find_unsupported(d, allow=(k for k in ["nodeAttr.hoi"])) == []
+    with pytest.raises(TypeError):
+        glyphs4to3.find_unsupported(d, allow="nodeAttr.hoi")
 
 
 def test_allowing_hoi_does_not_allow_anything_else():
